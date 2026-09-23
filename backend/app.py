@@ -39,7 +39,11 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    print("[API] Orbital Enhancement Engine service started.")
+    print("[API] Orbital Enhancement Engine starting...")
+    import torch
+    torch.set_num_threads(2)  # Prevent thread pool RAM explosion on cloud container
+    get_enhancer()
+    print("[API] Model pre-loaded and ready for fast inference.")
 
 
 @app.get("/api/health")
