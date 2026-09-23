@@ -141,10 +141,20 @@
     formData.append('deblur', optDeblur ? optDeblur.checked : false);
 
     try {
-      const response = await fetch(`${API_BASE}/api/enhance`, {
+      let response = await fetch(`${API_BASE}/api/enhance`, {
         method: 'POST',
         body: formData,
       });
+
+      // If Vercel proxy times out or returns 502/504, automatically retry directly against Render
+      if (!response.ok && (response.status === 502 || response.status === 504 || response.status === 503)) {
+        console.warn(`Proxy returned ${response.status}. Retrying directly against Render backend...`);
+        statusLabel.textContent = 'CONNECTING DIRECTLY TO ENGINE…';
+        response = await fetch(`https://terra-01.onrender.com/api/enhance`, {
+          method: 'POST',
+          body: formData,
+        });
+      }
 
       if (!response.ok) {
         let errorMsg = `Server error ${response.status}`;

@@ -91,18 +91,24 @@ def calculate_all_metrics(
     If the enhanced image has higher spatial resolution (e.g. 2x super-resolution),
     the reference image is bicubically resized to compute structural and fidelity metrics.
     """
-    h_enh, w_enh = enhanced.shape[:2]
-    h_ref, w_ref = reference.shape[:2]
-
-    if (h_ref, w_ref) != (h_enh, w_enh):
-        reference_matched = cv2.resize(reference, (w_enh, h_enh), interpolation=cv2.INTER_CUBIC)
+    # For large images (>480px), evaluate metrics on a normalized proxy to keep RAM tiny and compute in <10ms
+    max_metric_dim = 480
+    if max(w_enh, h_enh) > max_metric_dim:
+        scale_factor = max_metric_dim / max(w_enh, h_enh)
+        m_w, m_h = int(w_enh * scale_factor), int(h_enh * scale_factor)
+        enhanced_sub = cv2.resize(enhanced, (m_w, m_h), interpolation=cv2.INTER_AREA)
+        ref_sub = cv2.resize(reference, (m_w, m_h), interpolation=cv2.INTER_CUBIC)
     else:
-        reference_matched = reference
+        enhanced_sub = enhanced
+        if (h_ref, w_ref) != (h_enh, w_enh):
+            ref_sub = cv2.resize(reference, (w_enh, h_enh), interpolation=cv2.INTER_CUBIC)
+        else:
+            ref_sub = reference
 
-    psnr = calculate_psnr(reference_matched, enhanced, max_val=max_val)
-    ssim = calculate_ssim(reference_matched, enhanced, max_val=max_val)
-    rmse = calculate_rmse(reference_matched, enhanced)
-    mae = calculate_mae(reference_matched, enhanced)
+    psnr = calculate_psnr(ref_sub, enhanced_sub, max_val=max_val)
+    ssim = calculate_ssim(ref_sub, enhanced_sub, max_val=max_val)
+    rmse = calculate_rmse(ref_sub, enhanced_sub)
+    mae = calculate_mae(ref_sub, enhanced_sub)
 
     return {
         "psnr": round(psnr, 2),

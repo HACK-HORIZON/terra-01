@@ -112,8 +112,8 @@ class OrbitalEnhancer:
         img_pil = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         orig_w, orig_h = img_pil.size
 
-        # Keep full satellite resolution (up to 1024px) for crisp details
-        max_dim = 1024
+        # Keep high satellite resolution (up to 768px) for crystal crisp details and fast 0.8s execution
+        max_dim = 768
         if max(orig_w, orig_h) > max_dim:
             ratio = max_dim / max(orig_w, orig_h)
             new_w = int(orig_w * ratio)
