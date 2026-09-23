@@ -91,6 +91,9 @@ def calculate_all_metrics(
     If the enhanced image has higher spatial resolution (e.g. 2x super-resolution),
     the reference image is bicubically resized to compute structural and fidelity metrics.
     """
+    h_enh, w_enh = enhanced.shape[:2]
+    h_ref, w_ref = reference.shape[:2]
+
     # For large images (>480px), evaluate metrics on a normalized proxy to keep RAM tiny and compute in <10ms
     max_metric_dim = 480
     if max(w_enh, h_enh) > max_metric_dim:
