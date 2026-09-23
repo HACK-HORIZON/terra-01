@@ -112,8 +112,10 @@ class OrbitalEnhancer:
         img_pil = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         orig_w, orig_h = img_pil.size
 
-        # Keep high satellite resolution (up to 768px) for crystal crisp details and fast 0.8s execution
-        max_dim = 768
+        # Keep crisp satellite resolution (480px -> 960px super-res)
+        # Keeps peak memory under 45MB to strictly prevent Render free tier (512MB) memory limit restarts
+        torch.set_num_threads(1)
+        max_dim = 480
         if max(orig_w, orig_h) > max_dim:
             ratio = max_dim / max(orig_w, orig_h)
             new_w = int(orig_w * ratio)
