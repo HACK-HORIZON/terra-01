@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://terra-01.onrender.com/api/$1"
+    },
+    {
+      "source": "/samples/(.*)",
+      "destination": "https://terra-01.onrender.com/samples/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

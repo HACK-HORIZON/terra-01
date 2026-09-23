@@ -28,9 +28,9 @@
   let previewUrl = null;
   let isDraggingSlider = false;
 
-  // Allow overriding backend URL via localStorage, window config, or default live Render service
+  // Allow overriding backend URL via localStorage, or use same-origin proxy (Vercel rewrites)
   const storedApi = localStorage.getItem('TERRA_BACKEND_URL');
-  const configuredApi = window.__TERRA_API_URL__ || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : 'https://terra-01.onrender.com');
+  const configuredApi = window.__TERRA_API_URL__ !== undefined ? window.__TERRA_API_URL__ : '';
   const API_BASE = (storedApi || configuredApi || '').replace(/\/$/, '');
 
   // 1. Health check & backend connection
