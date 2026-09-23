@@ -112,11 +112,9 @@ class OrbitalEnhancer:
         img_pil = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         orig_w, orig_h = img_pil.size
 
-        # Cap max input dimension to 380px:
-        # 1. Produces sharp 760x760+ 2x super-resolution (3.6x more detail than 200px)
-        # 2. Runs in ~3.2 seconds on CPU, well below Vercel's 10-second timeout ceiling to prevent 502 errors
-        # 3. Peak RAM remains under 30MB on Render Free Tier
-        max_dim = 380
+        # Cap max input size to 200px to strictly stay under 40MB peak RAM on Render Free Tier (512MB RAM)
+        # Produces crisp 400x400 enhanced super-resolution output with 100% stability
+        max_dim = 200
         if max(orig_w, orig_h) > max_dim:
             ratio = max_dim / max(orig_w, orig_h)
             new_w = int(orig_w * ratio)
@@ -126,7 +124,7 @@ class OrbitalEnhancer:
 
         img_np = np.array(img_pil)
 
-        # 2. Hybrid Model Inference with Tiling (keeps RAM minimal while preserving high resolution)
+        # 2. Hybrid Model Inference
         x_tensor = torch.from_numpy(img_np).permute(2, 0, 1).unsqueeze(0).float() / 255.0
         
         # Move to device with correct dtype
@@ -137,11 +135,7 @@ class OrbitalEnhancer:
 
         with torch.no_grad():
             if scale == 2:
-                # Use tiled inference with tile_size=190 for speed and stability
-                if max(orig_w, orig_h) > 190:
-                    enhanced_tensor = self._tile_forward(x_tensor, self.model_2x, tile_size=190, overlap=16)
-                else:
-                    enhanced_tensor = self.model_2x(x_tensor)
+                enhanced_tensor = self.model_2x(x_tensor)
             else:
                 enhanced_tensor = x_tensor
 
@@ -174,7 +168,7 @@ class OrbitalEnhancer:
         out_w, out_h = out_pil.size
 
         buf_enhanced = io.BytesIO()
-        out_pil.save(buf_enhanced, format="JPEG", quality=92)
+        out_pil.save(buf_enhanced, format="JPEG", quality=90)  # JPEG is 8x lighter than PNG
         enhanced_b64 = "data:image/jpeg;base64," + base64.b64encode(buf_enhanced.getvalue()).decode("utf-8")
 
         buf_orig = io.BytesIO()
@@ -200,9 +194,9 @@ class OrbitalEnhancer:
             "scale_factor": scale
         }
 
-    def _tile_forward(self, x: torch.Tensor, model: torch.nn.Module, tile_size: int = 160, overlap: int = 16) -> torch.Tensor:
+    def _tile_forward(self, x: torch.Tensor, model: torch.nn.Module, tile_size: int = 400, overlap: int = 32) -> torch.Tensor:
         b, c, h, w = x.shape
-        scale = getattr(model, 'scale', 2)
+        scale = model.scale
         out_h, out_w = h * scale, w * scale
         output = torch.zeros((b, c, out_h, out_w), device=x.device)
         weights = torch.zeros((b, 1, out_h, out_w), device=x.device)
@@ -217,8 +211,7 @@ class OrbitalEnhancer:
                 x_start = max(0, x_end - tile_size)
 
                 tile = x[:, :, y_start:y_end, x_start:x_end]
-                with torch.no_grad():
-                    tile_out = model(tile)
+                tile_out = model(tile)
 
                 out_y_start = y_start * scale
                 out_y_end = y_end * scale
@@ -227,11 +220,8 @@ class OrbitalEnhancer:
 
                 output[:, :, out_y_start:out_y_end, out_x_start:out_x_end] += tile_out
                 weights[:, :, out_y_start:out_y_end, out_x_start:out_x_end] += 1.0
-                del tile, tile_out
 
-        result = output / torch.clamp(weights, min=1.0)
-        del output, weights
-        return result
+        return output / torch.clamp(weights, min=1.0)
 
     def _detect_clouds(self, img_rgb: np.ndarray) -> np.ndarray:
         """Detect clouds using HSV color space and brightness thresholds."""
@@ -347,19 +337,19 @@ class OrbitalEnhancer:
         if apply_dehaze:
             lab = cv2.cvtColor(res, cv2.COLOR_RGB2LAB)
             l, a, b = cv2.split(lab)
-            clahe = cv2.createCLAHE(clipLimit=1.6, tileGridSize=(8, 8))
+            clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8, 8))
             cl = clahe.apply(l)
             limg = cv2.merge((cl, a, b))
             res = cv2.cvtColor(limg, cv2.COLOR_LAB2RGB)
 
-        # 5. Denoising (edge-preserving)
+        # 5. Denoising (using denoise_level parameter)
         if denoise_level > 0:
-            res = self._denoise_bilateral(res, strength=min(denoise_level, 0.35))
+            res = self._denoise_bilateral(res, strength=denoise_level)
 
-        # 6. High-frequency edge sharpening for satellite structures (buildings, roads, edges)
+        # 6. High-frequency edge sharpening for satellite structures (roads, runways, docks)
         if apply_sharpen:
-            blurred = cv2.GaussianBlur(res, (0, 0), 1.2)
-            res = cv2.addWeighted(res, 1.35, blurred, -0.35, 0)
+            blurred = cv2.GaussianBlur(res, (0, 0), 1.5)
+            res = cv2.addWeighted(res, 1.25, blurred, -0.25, 0)
             res = np.clip(res, 0, 255).astype(np.uint8)
 
         return res
