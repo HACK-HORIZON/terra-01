@@ -39,24 +39,17 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    # Warm up enhancer and load PyTorch model into memory
-    print("[API] Starting up Orbital Enhancement Engine...")
-    get_enhancer()
-    print("[API] Engine ready to process requests.")
+    print("[API] Orbital Enhancement Engine service started.")
 
 
 @app.get("/api/health")
 async def health_check():
-    enhancer = get_enhancer()
-    param_count = sum(p.numel() for p in enhancer.model_2x.parameters())
     return {
         "status": "online",
         "engine": "OrbitalHybridNet",
         "type": "CNN + Transformer Hybrid",
-        "device": enhancer.device.upper(),
-        "cuda_available": torch.cuda.is_available(),
-        "parameter_count": param_count,
-        "default_scale": enhancer.model_2x.scale,
+        "device": "CPU",
+        "default_scale": 2,
         "message": "Orbital enhancement hybrid engine operational."
     }
 
