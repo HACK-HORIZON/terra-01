@@ -147,8 +147,15 @@
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Enhancement failed');
+        let errorMsg = `Server error ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.detail || errorMsg;
+        } catch {
+          const rawText = await response.text().catch(() => '');
+          if (rawText) errorMsg = `${errorMsg}: ${rawText.slice(0, 150)}`;
+        }
+        throw new Error(errorMsg);
       }
 
       const res = await response.json();
