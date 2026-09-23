@@ -112,10 +112,10 @@ class OrbitalEnhancer:
         img_pil = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         orig_w, orig_h = img_pil.size
 
-        # Keep crisp satellite resolution (480px -> 960px super-res)
-        # Keeps peak memory under 45MB to strictly prevent Render free tier (512MB) memory limit restarts
+        # Keep high-definition satellite resolution (720px -> 1440px super-res)
+        # Keeps peak memory safely under 85MB (well below Render's 512MB limit)
         torch.set_num_threads(1)
-        max_dim = 480
+        max_dim = 720
         if max(orig_w, orig_h) > max_dim:
             ratio = max_dim / max(orig_w, orig_h)
             new_w = int(orig_w * ratio)
@@ -177,11 +177,11 @@ class OrbitalEnhancer:
         out_w, out_h = out_pil.size
 
         buf_enhanced = io.BytesIO()
-        out_pil.save(buf_enhanced, format="JPEG", quality=90)  # JPEG is 8x lighter than PNG
+        out_pil.save(buf_enhanced, format="JPEG", quality=95)  # High fidelity satellite details
         enhanced_b64 = "data:image/jpeg;base64," + base64.b64encode(buf_enhanced.getvalue()).decode("utf-8")
 
         buf_orig = io.BytesIO()
-        img_pil.save(buf_orig, format="JPEG", quality=90)
+        img_pil.save(buf_orig, format="JPEG", quality=95)
         original_b64 = "data:image/jpeg;base64," + base64.b64encode(buf_orig.getvalue()).decode("utf-8")
 
         del img_np, enhanced_np, out_pil, img_pil

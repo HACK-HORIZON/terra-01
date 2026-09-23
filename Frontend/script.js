@@ -172,7 +172,8 @@
 
       // Display enhanced and original images
       enhancedImage.src = res.enhanced_image;
-      originalImage.src = res.original_image;
+      // Use true uncompressed client-side file preview for original image so it displays in 100% full original resolution
+      originalImage.src = previewUrl || res.original_image;
       downloadButton.href = res.enhanced_image;
       downloadButton.download = `sphere_enhanced_${selectedFile.name.replace(/\.[^/.]+$/, '')}_2x.png`;
 
