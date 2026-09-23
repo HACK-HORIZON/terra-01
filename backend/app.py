@@ -92,6 +92,7 @@ async def enhance_image(
         raise HTTPException(status_code=400, detail="Uploaded file must be a valid image format.")
 
     try:
+        import gc
         image_bytes = await file.read()
         enhancer = get_enhancer()
         result = enhancer.enhance_image(
@@ -104,11 +105,16 @@ async def enhance_image(
             remove_obstacles=remove_obstacles,
             deblur=deblur
         )
+        del image_bytes
+        gc.collect()
         return JSONResponse(content=result)
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Enhancement error: {str(e)}")
+    finally:
+        import gc
+        gc.collect()
 
 
 @app.get("/api/samples")

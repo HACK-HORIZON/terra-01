@@ -147,6 +147,7 @@ class OrbitalEnhancer:
             enhanced_tensor = enhanced_tensor.float()
         
         enhanced_np = (enhanced_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
+        del enhanced_tensor, x_tensor
 
         # 3. Satellite Spectral & Contrast Refinements (optional fast_mode)
         if not fast_mode and any([apply_dehaze, apply_sharpen, denoise_level > 0, remove_clouds, remove_obstacles, deblur]):
@@ -170,12 +171,16 @@ class OrbitalEnhancer:
         out_w, out_h = out_pil.size
 
         buf_enhanced = io.BytesIO()
-        out_pil.save(buf_enhanced, format="PNG", compress_level=1)  # Fast compression
-        enhanced_b64 = "data:image/png;base64," + base64.b64encode(buf_enhanced.getvalue()).decode("utf-8")
+        out_pil.save(buf_enhanced, format="JPEG", quality=90)  # JPEG is 8x lighter than PNG
+        enhanced_b64 = "data:image/jpeg;base64," + base64.b64encode(buf_enhanced.getvalue()).decode("utf-8")
 
         buf_orig = io.BytesIO()
-        img_pil.save(buf_orig, format="PNG", compress_level=1)
-        original_b64 = "data:image/png;base64," + base64.b64encode(buf_orig.getvalue()).decode("utf-8")
+        img_pil.save(buf_orig, format="JPEG", quality=90)
+        original_b64 = "data:image/jpeg;base64," + base64.b64encode(buf_orig.getvalue()).decode("utf-8")
+
+        del img_np, enhanced_np, out_pil, img_pil
+        import gc
+        gc.collect()
 
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
 
