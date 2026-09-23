@@ -28,7 +28,10 @@
   let previewUrl = null;
   let isDraggingSlider = false;
 
-  const API_BASE = ''; // Same origin - FastAPI serves both frontend and API
+  // Allow overriding backend URL via localStorage, window config, or environment
+  const storedApi = localStorage.getItem('TERRA_BACKEND_URL');
+  const configuredApi = window.__TERRA_API_URL__ || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : 'https://terra-01-backend.onrender.com');
+  const API_BASE = (storedApi || configuredApi || '').replace(/\/$/, '');
 
   // 1. Health check & backend connection
   async function checkBackendHealth() {
