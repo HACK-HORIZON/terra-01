@@ -176,6 +176,15 @@
       downloadButton.href = res.enhanced_image;
       downloadButton.download = `sphere_enhanced_${selectedFile.name.replace(/\.[^/.]+$/, '')}_2x.png`;
 
+      // Sync comparison overlay image width exactly to parent container
+      function syncCompImgWidth() {
+        if (comparisonContainer && originalImage) {
+          originalImage.style.width = `${comparisonContainer.offsetWidth}px`;
+        }
+      }
+      syncCompImgWidth();
+      window.addEventListener('resize', syncCompImgWidth);
+
       // Update metadata bar
       document.querySelector('#meta-res').textContent =
         `${res.input_resolution[0]}×${res.input_resolution[1]} → ${res.output_resolution[0]}×${res.output_resolution[1]}`;
