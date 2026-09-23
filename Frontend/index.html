@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#03070c" />
+  <meta name="description"
+    content="Terra transforms image quality with intelligent enhancement and measurable results." />
+  <title>Terra — Image intelligence, elevated</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Terra home">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span>Terra</span>
+    </a>
+    <div class="engine-badge" id="engine-badge">
+      <span class="engine-pulse"></span>
+      <span id="engine-status-text">Hybrid Engine: Initializing…</span>
+    </div>
+    <a class="login-link" href="#login" data-login-open>Login <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="eyebrow"><span></span> Image intelligence platform <span></span></div>
+      <h1 id="hero-title">See your images<br /><em>the way the universe sees them.</em></h1>
+      <p class="hero-copy">Bring clarity to every pixel. Terra uses intelligent enhancement to reveal more detail,
+        depth, and possibility.</p>
+    </section>
+
+    <section class="workspace" id="workspace" aria-labelledby="workspace-title">
+      <div class="section-label"><span class="label-number">01</span><span id="workspace-title">Upload your
+          image</span><span class="label-line"></span><span class="label-status">READY TO ENHANCE</span></div>
+      <div class="workspace-stage">
+        <div class="globe-glow" aria-hidden="true"></div>
+        <div id="globe-container" class="globe-container" role="img"
+          aria-label="Rotating realistic Earth globe visualization"></div>
+        <div class="upload-layout">
+          <div class="drop-zone-wrapper">
+            <div id="drop-zone" class="drop-zone" role="button" tabindex="0"
+              aria-label="Upload an image by dropping it here or browsing your files">
+              <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/tiff" hidden />
+              <img id="upload-preview" class="upload-preview" src="" alt="Uploaded image preview" />
+              <div class="drop-icon" aria-hidden="true"><span>↑</span></div>
+              <p class="drop-title">Drop orbital imagery here</p>
+              <p class="drop-subtitle">or <span>browse local files</span></p>
+              <p class="file-types">PNG · JPG · WEBP · TIFF <b>·</b> MAX 20MB</p>
+              <div id="file-status" class="file-status" aria-live="polite">No image selected</div>
+            </div>
+            <div class="sample-presets">
+              <span class="preset-label">OR TEST SAMPLES:</span>
+              <button type="button" class="preset-btn" data-sample="airport">✈ Airfield</button>
+              <button type="button" class="preset-btn" data-sample="agricultural">🌾 Agricultural</button>
+              <button type="button" class="preset-btn" data-sample="coastal">⚓ Coastal</button>
+            </div>
+          </div>
+          <div class="enhance-column">
+            <span class="action-label">CONFIGURATION</span>
+            <div class="options-panel">
+              <label class="option-row">
+                <input type="checkbox" id="opt-dehaze" checked />
+                <span>Atmospheric CLAHE</span>
+              </label>
+              <label class="option-row">
+                <input type="checkbox" id="opt-sharpen" checked />
+                <span>Edge Sharpening</span>
+              </label>
+              <label class="option-row">
+                <input type="checkbox" id="opt-deblur" />
+                <span>Deblur (Wiener)</span>
+              </label>
+              <label class="option-row">
+                <input type="checkbox" id="opt-clouds" />
+                <span>Cloud Removal</span>
+              </label>
+              <label class="option-row">
+                <input type="checkbox" id="opt-obstacles" />
+                <span>Obstacle Removal</span>
+              </label>
+            </div>
+            <button id="enhance-button" class="enhance-button" type="button" disabled>
+              <span class="button-text">Enhance with Hybrid AI</span><span class="button-arrow"
+                aria-hidden="true">→</span><span class="spinner" aria-hidden="true"></span>
+            </button>
+            <p class="action-note" id="action-note">OrbitalHybridNet: CNN local textures + Transformer global context
+              (2x Super-Res). <b>Trained 100 epochs</b> on augmented samples. Metrics vs bicubic — for true PSNR 28-45dB,
+              use paired HR/LR satellite data.</p>
+          </div>
+        </div>
+        <div class="orbital-note orbital-note-left"><span></span> LIVE ENGINE</div>
+        <div class="orbital-note orbital-note-right">AI / 01 <span></span></div>
+      </div>
+    </section>
+
+    <section class="results-section" aria-labelledby="results-title">
+      <div class="section-label">
+        <span class="label-number">02</span>
+        <span id="results-title">Enhanced orbital intelligence</span>
+        <span class="label-line"></span>
+        <span class="label-status">AWAITING INPUT</span>
+      </div>
+      <div id="image-result" class="image-result">
+        <div class="empty-state">
+          <div class="empty-cross" aria-hidden="true">+</div>
+          <p>Your enhanced orbital imagery will appear here</p>
+          <span>UPLOAD AN IMAGE OR SELECT A PRESET TO BEGIN</span>
+        </div>
+        <div id="result-display" class="result-display" hidden>
+          <div class="viewer-controls">
+            <div class="viewer-tabs">
+              <button type="button" class="tab-btn active" data-view="split">Split Slider</button>
+              <button type="button" class="tab-btn" data-view="enhanced">Enhanced (2x)</button>
+              <button type="button" class="tab-btn" data-view="original">Original</button>
+            </div>
+            <a id="download-button" class="download-button" href="#" download="Terra_enhanced_orbital.png">
+              <span>Download High-Res</span> <span aria-hidden="true">↓</span>
+            </a>
+          </div>
+          <div class="comparison-container" id="comparison-container">
+            <img id="enhanced-image" class="comp-img comp-enhanced" src="" alt="Enhanced orbital imagery" />
+            <div class="comp-overlay" id="comp-overlay">
+              <img id="original-image" class="comp-img comp-original" src="" alt="Original orbital imagery" />
+            </div>
+            <div class="comp-slider-line" id="comp-slider-line">
+              <div class="comp-handle"><span>◀ ▶</span></div>
+            </div>
+            <span class="comp-badge comp-badge-left">BEFORE (INPUT)</span>
+            <span class="comp-badge comp-badge-right">AFTER (HYBRID AI)</span>
+          </div>
+          <div class="result-meta-bar">
+            <span class="meta-item"><b id="meta-res">1024 × 1024</b> OUTPUT</span>
+            <span class="meta-divider">·</span>
+            <span class="meta-item"><b id="meta-time">1.8s</b> PROCESSING TIME</span>
+            <span class="meta-divider">·</span>
+            <span class="meta-item"><b id="meta-device">CPU</b> INFERENCE</span>
+            <span class="meta-divider">·</span>
+            <span class="meta-item"><b id="meta-arch">OrbitalHybridNet</b></span>
+          </div>
+        </div>
+        <div class="result-badge" id="result-badge"><span></span> HYBRID ENHANCEMENT COMPLETE</div>
+      </div>
+    </section>
+
+    <section id="metrics-panel" class="metrics-panel" aria-labelledby="metrics-title" hidden>
+      <div class="metrics-heading">
+        <div>
+          <div class="eyebrow eyebrow-left"><span></span> Quality report</div>
+          <h2 id="metrics-title">A clearer measure<br /><em>of better.</em></h2>
+        </div><span class="report-id">REPORT / SPH-<b>01</b></span>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card"><span class="metric-name">PSNR <small>DB</small></span><strong
+            id="metric-psnr">—</strong><span class="metric-bar"><i></i></span></div>
+        <div class="metric-card"><span class="metric-name">SSIM <small>SCORE</small></span><strong
+            id="metric-ssim">—</strong><span class="metric-bar"><i></i></span></div>
+        <div class="metric-card"><span class="metric-name">RMSE <small>ERROR</small></span><strong
+            id="metric-rmse">—</strong><span class="metric-bar"><i></i></span></div>
+        <div class="metric-card"><span class="metric-name">MAE <small>ERROR</small></span><strong
+            id="metric-mae">—</strong><span class="metric-bar"><i></i></span></div>
+      </div>
+      <p class="metrics-caption"><span>✦</span> These metrics let you objectively judge <b>Low → High</b> resolution
+        quality. <b>Model trained 100 epochs</b> (loss 0.011→0.005). For true SR PSNR 28-45dB, evaluate with paired HR/LR satellite data.</p>
+    </section>
+  </main>
+
+  <footer><span>Terra / IMAGE INTELLIGENCE</span><span>BUILT FOR A CLEARER FUTURE <b>✦</b></span></footer>
+
+  <div id="login-modal" class="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title"
+    aria-hidden="true" hidden>
+    <div class="modal-backdrop" data-login-close></div>
+    <div class="login-card">
+      <button class="modal-close" type="button" aria-label="Close login" data-login-close>×</button>
+      <div id="login-view" class="auth-view">
+        <div class="eyebrow eyebrow-left"><span></span> Secure access</div>
+        <h2 id="login-title">Welcome back<br /><em>to Terra.</em></h2>
+        <p class="login-copy">Sign in to revisit your enhancement workspace and quality reports.</p>
+        <form id="login-form">
+          <label for="login-email">Email address</label>
+          <input id="login-email" name="email" type="email" autocomplete="email" placeholder="you@example.com"
+            required />
+          <label for="login-password">Password</label>
+          <input id="login-password" name="password" type="password" autocomplete="current-password"
+            placeholder="Enter your password" minlength="8" required />
+          <div class="login-options"><label class="remember"><input type="checkbox" name="remember" /> <span>Remember
+                me</span></label><a href="#login" data-login-help>Forgot password?</a></div>
+          <button class="login-submit" type="submit">Log in <span aria-hidden="true">→</span></button>
+          <p id="login-status" class="login-status" aria-live="polite"></p>
+        </form>
+        <p class="signup-prompt">New to Terra? <a href="#login" data-auth-switch="signup">Create an account</a></p>
+      </div>
+      <div id="signup-view" class="auth-view" hidden>
+        <div class="eyebrow eyebrow-left"><span></span> New explorer</div>
+        <h2 id="signup-title">Create your<br /><em>Terra account.</em></h2>
+        <p class="login-copy">Save your image enhancements and track quality across every project.</p>
+        <form id="signup-form">
+          <label for="signup-name">Full name</label>
+          <input id="signup-name" name="name" type="text" autocomplete="name" placeholder="Your name" required />
+          <label for="signup-email">Email address</label>
+          <input id="signup-email" name="email" type="email" autocomplete="email" placeholder="you@example.com"
+            required />
+          <label for="signup-password">Create password</label>
+          <input id="signup-password" name="password" type="password" autocomplete="new-password"
+            placeholder="At least 8 characters" minlength="8" required />
+          <button class="login-submit" type="submit">Create account <span aria-hidden="true">→</span></button>
+          <p id="signup-status" class="login-status" aria-live="polite"></p>
+        </form>
+        <p class="signup-prompt">Already have an account? <a href="#login" data-auth-switch="login">Log in</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script type="module" src="./script.js"></script>
+</body>
+
+</html>

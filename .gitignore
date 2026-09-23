@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Python cache & virtual environments
+__pycache__/
+*/__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Environment and sensitive keys
+.env
+.env*.local
+*.env
+
+# Build outputs & logs
+dist/
+build/
+*.log
+
+# Editor & OS files
+.vscode/
+.kilo/
+desktop.ini
+.DS_Store
+Thumbs.db
