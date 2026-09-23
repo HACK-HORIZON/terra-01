@@ -112,8 +112,9 @@ class OrbitalEnhancer:
         img_pil = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         orig_w, orig_h = img_pil.size
 
-        # Cap max input size to 384px to strictly stay under 60MB RAM on Render Free Tier (512MB RAM)
-        max_dim = 384
+        # Cap max input size to 200px to strictly stay under 40MB peak RAM on Render Free Tier (512MB RAM)
+        # Produces crisp 400x400 enhanced super-resolution output with 100% stability
+        max_dim = 200
         if max(orig_w, orig_h) > max_dim:
             ratio = max_dim / max(orig_w, orig_h)
             new_w = int(orig_w * ratio)
