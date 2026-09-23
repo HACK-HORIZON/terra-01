@@ -18,8 +18,12 @@ import cv2
 import torch
 import torch.nn.functional as F
 
-from .model.hybrid_transformer import OrbitalHybridNet, create_model
-from .model.metrics import calculate_all_metrics
+try:
+    from .model.hybrid_transformer import OrbitalHybridNet, create_model
+    from .model.metrics import calculate_all_metrics
+except ImportError:
+    from model.hybrid_transformer import OrbitalHybridNet, create_model
+    from model.metrics import calculate_all_metrics
 
 WEIGHTS_DIR = os.path.join(os.path.dirname(__file__), "model", "weights")
 WEIGHTS_PATH = os.path.join(WEIGHTS_DIR, "orbital_hybrid_net.pth")

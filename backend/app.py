@@ -11,8 +11,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 import torch
 
-from .enhancer import get_enhancer
-from .model.hybrid_transformer import OrbitalHybridNet
+try:
+    from .enhancer import get_enhancer
+    from .model.hybrid_transformer import OrbitalHybridNet
+except ImportError:
+    from enhancer import get_enhancer
+    from model.hybrid_transformer import OrbitalHybridNet
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
