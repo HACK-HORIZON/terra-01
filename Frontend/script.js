@@ -81,8 +81,28 @@
   }
 
   // 3. Preset sample buttons
+  let isEnhancing = false;
+
+  function setControlsLocked(locked) {
+    isEnhancing = locked;
+    dropZone.classList.toggle('locked', locked);
+    fileInput.disabled = locked;
+    const optionsPanel = document.querySelector('.options-panel');
+    if (optionsPanel) {
+      optionsPanel.classList.toggle('locked', locked);
+      optionsPanel.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+        cb.disabled = locked;
+      });
+    }
+    document.querySelectorAll('.preset-btn').forEach((btn) => {
+      btn.disabled = locked;
+    });
+  }
+
+  // 3. Preset sample buttons
   document.querySelectorAll('.preset-btn').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
+      if (isEnhancing) return;
       e.stopPropagation();
       const sampleId = btn.dataset.sample;
       fileStatus.textContent = `Fetching ${sampleId} orbital sample…`;
@@ -101,27 +121,37 @@
   });
 
   // Dropzone events
-  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('click', () => {
+    if (isEnhancing) return;
+    fileInput.click();
+  });
   dropZone.addEventListener('keydown', (event) => {
+    if (isEnhancing) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       fileInput.click();
     }
   });
-  fileInput.addEventListener('change', () => setFile(fileInput.files[0]));
+  fileInput.addEventListener('change', () => {
+    if (isEnhancing) return;
+    setFile(fileInput.files[0]);
+  });
   ['dragenter', 'dragover'].forEach((eventName) =>
     dropZone.addEventListener(eventName, (event) => {
+      if (isEnhancing) return;
       event.preventDefault();
       dropZone.classList.add('dragover');
     })
   );
   ['dragleave', 'drop'].forEach((eventName) =>
     dropZone.addEventListener(eventName, (event) => {
+      if (isEnhancing) return;
       event.preventDefault();
       dropZone.classList.remove('dragover');
     })
   );
   dropZone.addEventListener('drop', (event) => {
+    if (isEnhancing) return;
     if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
       setFile(event.dataTransfer.files[0]);
     }
@@ -129,8 +159,9 @@
 
   // 4. Enhance button -> POST /api/enhance
   enhanceButton.addEventListener('click', async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || isEnhancing) return;
 
+    setControlsLocked(true);
     enhanceButton.disabled = true;
     enhanceButton.classList.add('loading');
     enhanceButton.querySelector('.button-text').textContent = 'Processing Hybrid Net…';
@@ -141,7 +172,7 @@
     formData.append('scale', 2);
     formData.append('apply_dehaze', optDehaze ? optDehaze.checked : true);
     formData.append('apply_sharpen', optSharpen ? optSharpen.checked : true);
-    formData.append('denoise_level', 0.5);
+    formData.append('denoise_level', 0.0);
     formData.append('remove_clouds', optClouds ? optClouds.checked : false);
     formData.append('remove_obstacles', optObstacles ? optObstacles.checked : false);
     formData.append('deblur', optDeblur ? optDeblur.checked : false);
@@ -277,6 +308,7 @@
       statusLabel.textContent = 'ERROR ENHANCING';
       alert('Error during enhancement: ' + err.message);
     } finally {
+      setControlsLocked(false);
       enhanceButton.classList.remove('loading');
       enhanceButton.querySelector('.button-text').textContent = 'Enhance Again';
       enhanceButton.disabled = false;
@@ -299,12 +331,17 @@
   }
 
   let currentViewMode = 'split';
+  let isPanning = false;
+  let panStartX = 0, panStartY = 0;
+  let scrollStartX = 0, scrollStartY = 0;
 
   function applyViewMode(mode) {
     currentViewMode = mode;
     tabButtons.forEach((t) => t.classList.toggle('active', t.dataset.view === mode));
     const badgeLeft = document.querySelector('.comp-badge-left');
     const badgeRight = document.querySelector('.comp-badge-right');
+
+    comparisonContainer.classList.toggle('zoom-mode', mode === 'zoom');
 
     if (mode === 'split') {
       compSliderLine.style.display = 'block';
@@ -335,10 +372,27 @@
         badgeLeft.textContent = 'BEFORE (ORIGINAL INPUT)';
       }
       if (badgeRight) badgeRight.style.display = 'none';
+    } else if (mode === 'zoom') {
+      compSliderLine.style.display = 'none';
+      compOverlay.style.display = 'none';
+      if (badgeLeft) badgeLeft.style.display = 'none';
+      if (badgeRight) {
+        badgeRight.style.display = 'block';
+        badgeRight.textContent = '1:1 NATIVE PIXELS (DRAG TO PAN)';
+      }
     }
   }
 
   comparisonContainer.addEventListener('mousedown', (e) => {
+    if (currentViewMode === 'zoom') {
+      isPanning = true;
+      panStartX = e.clientX;
+      panStartY = e.clientY;
+      scrollStartX = comparisonContainer.scrollLeft;
+      scrollStartY = comparisonContainer.scrollTop;
+      e.preventDefault();
+      return;
+    }
     if (currentViewMode !== 'split') {
       applyViewMode('split');
     }
@@ -346,13 +400,29 @@
     updateSliderFromEvent(e);
   });
   window.addEventListener('mousemove', (e) => {
+    if (isPanning && currentViewMode === 'zoom') {
+      const dx = e.clientX - panStartX;
+      const dy = e.clientY - panStartY;
+      comparisonContainer.scrollLeft = scrollStartX - dx;
+      comparisonContainer.scrollTop = scrollStartY - dy;
+      return;
+    }
     if (isDraggingSlider) updateSliderFromEvent(e);
   });
   window.addEventListener('mouseup', () => {
     isDraggingSlider = false;
+    isPanning = false;
   });
 
   comparisonContainer.addEventListener('touchstart', (e) => {
+    if (currentViewMode === 'zoom') {
+      isPanning = true;
+      panStartX = e.touches[0].clientX;
+      panStartY = e.touches[0].clientY;
+      scrollStartX = comparisonContainer.scrollLeft;
+      scrollStartY = comparisonContainer.scrollTop;
+      return;
+    }
     if (currentViewMode !== 'split') {
       applyViewMode('split');
     }
@@ -360,10 +430,18 @@
     updateSliderFromEvent(e);
   }, { passive: true });
   window.addEventListener('touchmove', (e) => {
+    if (isPanning && currentViewMode === 'zoom' && e.touches) {
+      const dx = e.touches[0].clientX - panStartX;
+      const dy = e.touches[0].clientY - panStartY;
+      comparisonContainer.scrollLeft = scrollStartX - dx;
+      comparisonContainer.scrollTop = scrollStartY - dy;
+      return;
+    }
     if (isDraggingSlider) updateSliderFromEvent(e);
   }, { passive: true });
   window.addEventListener('touchend', () => {
     isDraggingSlider = false;
+    isPanning = false;
   });
 
   // 6. View Tabs (Split / Enhanced / Original)

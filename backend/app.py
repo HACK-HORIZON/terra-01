@@ -102,7 +102,7 @@ async def enhance_image(
     scale: int = Form(2),
     apply_dehaze: bool = Form(True),
     apply_sharpen: bool = Form(True),
-    denoise_level: float = Form(0.5),
+    denoise_level: float = Form(0.0),
     remove_clouds: bool = Form(False),
     remove_obstacles: bool = Form(False),
     deblur: bool = Form(False)

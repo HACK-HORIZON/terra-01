@@ -1,21 +1,19 @@
 """
-Root Application Launcher for Orbital Image Intelligence Platform.
-Boots the FastAPI backend serving both the CNN-Transformer Hybrid Engine
-and the interactive web frontend on http://localhost:8000.
+Terra: Orbital Image Intelligence Platform Launcher.
+Runs the FastAPI backend and serves the frontend on http://localhost:8000.
 """
 
 import sys
 import os
 import uvicorn
 
-# Ensure repository root is on sys.path so 'backend' package is always importable
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  SPHERE: Orbital Image Intelligence Platform")
+    print("  TERRA: Orbital Image Intelligence Platform")
     print("  Hybrid CNN + Transformer Deep Learning Super-Resolution")
     print("=" * 60)
     print("Starting server at http://localhost:8000 ...")

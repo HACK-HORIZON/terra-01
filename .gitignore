@@ -20,6 +20,12 @@ venv/
 dist/
 build/
 *.log
+*.bak
+backend/scratch/
+scratch/
+dataset/
+Frontend/dataset/
+Frontend/public/samples/Screenshot*
 
 # Editor & OS files
 .vscode/

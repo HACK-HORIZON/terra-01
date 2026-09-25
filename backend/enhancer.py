@@ -40,21 +40,7 @@ class OrbitalEnhancer:
         self.model_2x = create_model(scale=2, device=self.device)
         self._init_or_load_weights()
         self.model_2x.eval()
-        
-        # Compile model for faster inference (PyTorch 2.0+)
-        if hasattr(torch, 'compile') and self.device == 'cuda':
-            try:
-                self.model_2x = torch.compile(self.model_2x, mode='reduce-overhead')
-                print("[OrbitalEnhancer] Model compiled with torch.compile")
-            except Exception as e:
-                print(f"[OrbitalEnhancer] torch.compile failed: {e}")
-        
-        # Half precision for CUDA
-        if self.device == 'cuda':
-            self.model_2x.half()
-            print("[OrbitalEnhancer] Using FP16 inference")
-        
-        print(f"[OrbitalEnhancer] Hybrid model ready.")
+        print(f"[OrbitalEnhancer] Hybrid model ready on {self.device.upper()}.")
 
     def _init_or_load_weights(self):
         os.makedirs(WEIGHTS_DIR, exist_ok=True)
@@ -94,7 +80,7 @@ class OrbitalEnhancer:
         scale: int = 2,
         apply_dehaze: bool = True,
         apply_sharpen: bool = True,
-        denoise_level: float = 0.5,
+        denoise_level: float = 0.0,
         remove_clouds: bool = False,
         remove_obstacles: bool = False,
         deblur: bool = False,
@@ -112,10 +98,11 @@ class OrbitalEnhancer:
         img_pil = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         orig_w, orig_h = img_pil.size
 
-        # Limit maximum dimension to 512px to guarantee 1024x1024 HD output while remaining
-        # strictly within Render free-tier 512MB RAM and 100s timeout limits.
+        # Maximum dimension: On Render free-tier (CPU), limit to 512px to prevent cloud OOM.
+        # On local machine / CUDA GPU, allow full resolution up to 2500px without downscaling!
         torch.set_num_threads(1)
-        max_dim = 512
+        is_cloud_render = bool(os.environ.get('RENDER'))
+        max_dim = 512 if (self.device == 'cpu' and is_cloud_render) else 2500
         if max(orig_w, orig_h) > max_dim:
             ratio = max_dim / max(orig_w, orig_h)
             new_w = int(orig_w * ratio)
@@ -133,9 +120,8 @@ class OrbitalEnhancer:
             x_in = x_in.to(self.device)
 
             with torch.no_grad():
-                # Direct forward pass for compact images (<= 160px). For larger images, use seamless Hann-windowed
-                # tile inference (tile_size=160, overlap=20) to strictly maintain RAM under 40MB (eliminating 502/OOM errors)
-                if max(w, h) <= 160:
+                # Direct full-resolution pass on GPU (blazing fast on RTX 3050 without tile blending)
+                if self.device == 'cuda' or max(w, h) <= 256:
                     sr_tensor = self.model_2x(x_in)
                 else:
                     sr_tensor = self._tile_forward(x_in, self.model_2x, tile_size=160, overlap=20)
@@ -151,7 +137,7 @@ class OrbitalEnhancer:
             enhanced_np = img_np.copy()
 
         # 3. Satellite Spectral & Radiometric Refinements (optional fast_mode)
-        if not fast_mode and any([apply_dehaze, apply_sharpen, denoise_level > 0, remove_clouds, remove_obstacles, deblur]):
+        if not fast_mode and any([apply_dehaze, apply_sharpen, denoise_level > 0.3, remove_clouds, remove_obstacles, deblur]):
             enhanced_np = self._apply_orbital_filters(
                 enhanced_np,
                 apply_dehaze=apply_dehaze,
@@ -167,17 +153,17 @@ class OrbitalEnhancer:
         if compute_metrics:
             metrics = calculate_all_metrics(img_np, enhanced_np)
 
-        # 5. Base64 encoding (high quality, faithful representation)
+        # 5. Base64 encoding (high quality lossless PNG for enhanced output)
         out_pil = Image.fromarray(enhanced_np)
         out_w, out_h = out_pil.size
 
         buf_enhanced = io.BytesIO()
-        out_pil.save(buf_enhanced, format="JPEG", quality=96)
-        enhanced_b64 = "data:image/jpeg;base64," + base64.b64encode(buf_enhanced.getvalue()).decode("utf-8")
+        out_pil.save(buf_enhanced, format="PNG")
+        enhanced_b64 = "data:image/png;base64," + base64.b64encode(buf_enhanced.getvalue()).decode("utf-8")
 
         buf_orig = io.BytesIO()
-        img_pil.save(buf_orig, format="JPEG", quality=96)
-        original_b64 = "data:image/jpeg;base64," + base64.b64encode(buf_orig.getvalue()).decode("utf-8")
+        img_pil.save(buf_orig, format="PNG")
+        original_b64 = "data:image/png;base64," + base64.b64encode(buf_orig.getvalue()).decode("utf-8")
 
         del img_np, enhanced_np, out_pil, img_pil
         import gc
@@ -326,49 +312,57 @@ class OrbitalEnhancer:
         img_rgb: np.ndarray,
         apply_dehaze: bool = True,
         apply_sharpen: bool = True,
-        denoise_level: float = 0.5,
+        denoise_level: float = 0.0,
         remove_clouds: bool = False,
         remove_obstacles: bool = False,
         deblur: bool = False
     ) -> np.ndarray:
         res = img_rgb.copy()
 
-        # 1. Cloud removal (before other processing)
+        # 1. Cloud removal (strictly guarded so buildings, roads, and text are never smudged)
         if remove_clouds:
             cloud_mask = self._detect_clouds(res)
-            if np.any(cloud_mask > 0):
+            # Only inpaint if substantial cloud area is found, and limit mask size
+            if np.any(cloud_mask > 0) and np.mean(cloud_mask > 0) < 0.30:
                 res = self._inpaint_regions(res, cloud_mask, method="telea")
 
-        # 2. Obstacle removal
+        # 2. Obstacle removal (strictly guarded)
         if remove_obstacles:
             obstacle_mask = self._detect_obstacles(res)
-            if np.any(obstacle_mask > 0):
+            if np.any(obstacle_mask > 0) and np.mean(obstacle_mask > 0) < 0.15:
                 res = self._inpaint_regions(res, obstacle_mask, method="telea")
 
-        # 3. Deblurring
+        # 3. Deblurring (Wiener-approximated deconvolution)
         if deblur:
             res = self._deblur_wiener(res)
 
-        # 4. CLAHE in LAB space - calibrated for satellite radiometry (preserves natural dynamic range)
-        if apply_dehaze:
+        # 4. Multi-scale High-Frequency Edge & Atmospheric Contrast Restoration
+        # Operates strictly on the Luminance (L) channel in LAB color space to eliminate chromatic fringing
+        if apply_dehaze or apply_sharpen:
             lab = cv2.cvtColor(res, cv2.COLOR_RGB2LAB)
             l, a, b = cv2.split(lab)
-            # Gentle CLAHE with mild clipLimit blended with original luminance to prevent harsh contrast/shadows
-            clahe = cv2.createCLAHE(clipLimit=1.1, tileGridSize=(8, 8))
-            cl = clahe.apply(l)
-            l_enhanced = cv2.addWeighted(l, 0.85, cl, 0.15, 0)
-            limg = cv2.merge((l_enhanced, a, b))
-            res = cv2.cvtColor(limg, cv2.COLOR_LAB2RGB)
 
-        # 5. Denoising (subtle edge-preserving bilateral filter)
-        if denoise_level > 0:
+            # Atmospheric CLAHE contrast enhancement
+            if apply_dehaze:
+                clahe = cv2.createCLAHE(clipLimit=1.6, tileGridSize=(8, 8))
+                l = clahe.apply(l)
+
+            # Multi-scale structural edge and texture restoration
+            if apply_sharpen:
+                blur_fine = cv2.GaussianBlur(l, (0, 0), 0.8)
+                blur_mid = cv2.GaussianBlur(l, (0, 0), 2.2)
+                detail_fine = cv2.subtract(l, blur_fine)
+                detail_mid = cv2.subtract(l, blur_mid)
+
+                l_boost = l.astype(np.float32) + 1.35 * detail_fine.astype(np.float32) + 0.35 * detail_mid.astype(np.float32)
+                l = np.clip(l_boost, 0, 255).astype(np.uint8)
+
+            enhanced_lab = cv2.merge((l, a, b))
+            res = cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2RGB)
+
+        # 5. Denoising: ONLY applied if explicitly requested with level > 0.3
+        if denoise_level > 0.3:
             res = self._denoise_bilateral(res, strength=min(denoise_level, 0.2))
-
-        # 6. High-frequency structural edge restoration (sharpens roads & roofs without halo artifacts or ringing)
-        if apply_sharpen:
-            blurred = cv2.GaussianBlur(res, (0, 0), 1.0)
-            res = cv2.addWeighted(res, 1.10, blurred, -0.10, 0)
-            res = np.clip(res, 0, 255).astype(np.uint8)
 
         return res
 

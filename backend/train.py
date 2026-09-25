@@ -18,7 +18,15 @@ from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 import torchvision.transforms as T
 
-from model.hybrid_transformer import OrbitalHybridNet
+import sys
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+try:
+    from model.hybrid_transformer import OrbitalHybridNet
+except ImportError:
+    from backend.model.hybrid_transformer import OrbitalHybridNet
 
 
 class OrbitalDataset(Dataset):
@@ -70,6 +78,19 @@ class CharbonnierLoss(nn.Module):
         return loss
 
 
+class EdgeLoss(nn.Module):
+    """Laplacian high-frequency edge loss to eliminate blur and maximize sharpness."""
+    def __init__(self):
+        super().__init__()
+        kernel = torch.tensor([[0., 1., 0.], [1., -4., 1.], [0., 1., 0.]]).view(1, 1, 3, 3)
+        self.register_buffer('kernel', kernel.repeat(3, 1, 1, 1))
+
+    def forward(self, pred, target):
+        pred_edges = F.conv2d(pred, self.kernel, padding=1, groups=3)
+        target_edges = F.conv2d(target, self.kernel, padding=1, groups=3)
+        return F.l1_loss(pred_edges, target_edges)
+
+
 def train(args):
     device = "cuda" if torch.cuda.is_available() and not args.cpu else "cpu"
     print(f"[Training] Using device: {device.upper()}")
@@ -86,7 +107,7 @@ def train(args):
     if resume_path and os.path.exists(resume_path) and not args.fresh:
         print(f"[Training] Loading checkpoint to continue training: {resume_path}")
         try:
-            state_dict = torch.load(resume_path, map_location=device)
+            state_dict = torch.load(resume_path, map_location=device, weights_only=True)
             model.load_state_dict(state_dict)
             print("[Training] Checkpoint successfully loaded! Warm-starting training.")
         except Exception as e:
@@ -96,7 +117,8 @@ def train(args):
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
-    criterion = CharbonnierLoss()
+    criterion_charb = CharbonnierLoss()
+    criterion_edge = EdgeLoss().to(device)
 
     # Auto-detect data_dir if default does not exist
     data_dir = args.data_dir
@@ -118,7 +140,7 @@ def train(args):
         return
 
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
-    print(f"[Training] Dataset loaded: {len(dataset)} orbital tiles. Starting {args.epochs} epochs...")
+    print(f"[Training] Dataset loaded: {len(dataset)} orbital tiles. Starting {args.epochs} epochs with Edge-Aware Loss...")
 
     os.makedirs(args.save_dir, exist_ok=True)
     save_filename = args.save_name if args.save_name else "orbital_hybrid_net.pth"
@@ -134,9 +156,11 @@ def train(args):
 
             optimizer.zero_grad()
             sr = model(lr)
-            loss = criterion(sr, hr)
+            loss_charb = criterion_charb(sr, hr)
+            loss_edge = criterion_edge(sr, hr)
+            loss = loss_charb + 3.0 * loss_edge
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             total_loss += loss.item()
@@ -150,7 +174,7 @@ def train(args):
         avg_psnr = 10 * torch.log10(torch.tensor(1.0 / max(avg_mse, 1e-8))).item()
         elapsed = time.time() - start
         current_lr = scheduler.get_last_lr()[0]
-        print(f"[Epoch {epoch:03d}/{args.epochs:03d}] Loss: {avg_loss:.6f} | PSNR: {avg_psnr:.2f} dB | LR: {current_lr:.2e} | Time: {elapsed:.2f}s")
+        print(f"[Epoch {epoch:03d}/{args.epochs:03d}] Loss: {avg_loss:.6f} | PSNR: {avg_psnr:.2f} dB | LR: {current_lr:.2e} | Time: {elapsed:.2f}s", flush=True)
 
         if epoch % args.save_interval == 0 or epoch == args.epochs:
             # Backup previous weights before overwriting
@@ -162,7 +186,7 @@ def train(args):
                 except Exception:
                     pass
             torch.save(model.state_dict(), save_path)
-            print(f"[Training] Model checkpoint saved to {save_path} (backup created)")
+            print(f"[Training] Model checkpoint saved to {save_path} (backup created)", flush=True)
 
 
 if __name__ == "__main__":

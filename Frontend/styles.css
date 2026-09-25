@@ -44,6 +44,11 @@ body.modal-open{overflow:hidden}.login-modal{position:fixed;inset:0;z-index:20;d
 .option-row input[type="checkbox"]{accent-color:var(--cyan);cursor:pointer;width:14px;height:14px}
 .option-row:hover{color:var(--ink)}
 
+/* Locked processing states to prevent mid-enhancement modifications */
+.drop-zone.locked{pointer-events:none!important;cursor:not-allowed!important;opacity:.72;filter:brightness(.85)}
+.options-panel.locked{pointer-events:none!important;cursor:not-allowed!important;opacity:.48}
+.preset-btn:disabled{opacity:.35!important;cursor:not-allowed!important;pointer-events:none!important}
+
 /* Results view & Split Slider */
 .result-display{width:100%;display:flex;flex-direction:column;gap:16px;padding:0}
 .viewer-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:16px 20px 0}
@@ -64,6 +69,15 @@ body.modal-open{overflow:hidden}.login-modal{position:fixed;inset:0;z-index:20;d
 .comp-badge{position:absolute;bottom:14px;padding:4px 10px;font-size:9px;letter-spacing:.14em;background:rgba(3,7,12,.85);border:1px solid rgba(87,232,235,.3);color:var(--cyan);pointer-events:none;z-index:3;transition:opacity .2s}
 .comp-badge-left{left:14px}
 .comp-badge-right{right:14px}
+
+/* 1:1 Pixel Zoom mode - unconstrained native resolution inspection with smooth pan */
+.comparison-container.zoom-mode{overflow:auto!important;cursor:grab!important}
+.comparison-container.zoom-mode:active{cursor:grabbing!important}
+.comparison-container.zoom-mode .comp-img{position:relative!important;width:auto!important;height:auto!important;max-width:none!important;max-height:none!important;object-fit:none!important}
+.comparison-container.zoom-mode .comp-overlay{display:none!important}
+.comparison-container.zoom-mode .comp-slider-line{display:none!important}
+.comparison-container.zoom-mode .comp-badge-left{display:none!important}
+.comparison-container.zoom-mode .comp-badge-right{display:block!important;position:sticky;bottom:14px;right:14px;float:right}
 
 /* Meta status bar below viewer */
 .result-meta-bar{display:flex;align-items:center;justify-content:center;gap:14px;padding:8px;font-size:11px;color:#7c909c;letter-spacing:.08em;background:rgba(3,8,13,.5);border:1px solid rgba(178,215,231,.1)}
