@@ -133,11 +133,12 @@ class OrbitalEnhancer:
             x_in = x_in.to(self.device)
 
             with torch.no_grad():
-                # Direct full-frame forward pass if dimension <= 1280 (memory-efficient & seam-free)
-                if max(w, h) <= 1280:
+                # Direct forward pass for compact images (<= 320px). For larger images, use seamless Hann-windowed
+                # tile inference (tile_size=320, overlap=32) to strictly maintain RAM well under 50MB (critical for Render's 512MB limit)
+                if max(w, h) <= 320:
                     sr_tensor = self.model_2x(x_in)
                 else:
-                    sr_tensor = self._tile_forward(x_in, self.model_2x, tile_size=512, overlap=48)
+                    sr_tensor = self._tile_forward(x_in, self.model_2x, tile_size=320, overlap=32)
 
                 if sr_tensor.dtype == torch.float16:
                     sr_tensor = sr_tensor.float()

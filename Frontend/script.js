@@ -28,29 +28,34 @@
   let previewUrl = null;
   let isDraggingSlider = false;
 
-  // Allow overriding backend URL via localStorage, or use same-origin proxy (Vercel rewrites)
+  // Automatically route to Render in production (avoids Vercel Hobby 10-second rewrite timeout)
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const storedApi = localStorage.getItem('TERRA_BACKEND_URL');
   const configuredApi = window.__TERRA_API_URL__ !== undefined ? window.__TERRA_API_URL__ : '';
-  const API_BASE = (storedApi || configuredApi || '').replace(/\/$/, '');
+  const defaultCloudApi = 'https://terra-01.onrender.com';
+  const API_BASE = (storedApi || configuredApi || (isLocal ? '' : defaultCloudApi)).replace(/\/$/, '');
 
   // 1. Health check & backend connection
   async function checkBackendHealth() {
     try {
-      const response = await fetch(`${API_BASE}/api/health`);
-      if (response.ok) {
-        const data = await response.json();
+      let resp = await fetch(`${API_BASE}/api/health`, { mode: 'cors' }).catch(() => null);
+      if (!resp || !resp.ok) {
+        resp = await fetch('/api/health').catch(() => null);
+      }
+      if (resp && resp.ok) {
+        const data = await resp.json();
         if (engineBadge && engineStatusText) {
           engineBadge.classList.remove('connecting', 'offline');
           engineStatusText.textContent = `Hybrid Engine: Online [${data.device}]`;
         }
       } else {
-        throw new Error('Health check returned ' + response.status);
+        throw new Error('Health check returned offline');
       }
     } catch (err) {
       if (engineBadge && engineStatusText) {
         engineBadge.classList.remove('connecting');
         engineBadge.classList.add('offline');
-        engineStatusText.textContent = 'Hybrid Engine: Offline';
+        engineStatusText.textContent = 'Hybrid Engine: Standby (Waking up...)';
       }
     }
   }
@@ -141,29 +146,46 @@
     formData.append('deblur', optDeblur ? optDeblur.checked : false);
 
     try {
-      let response = await fetch(`${API_BASE}/api/enhance`, {
-        method: 'POST',
-        body: formData,
-      });
+      const primaryUrl = `${API_BASE}/api/enhance`;
+      statusLabel.textContent = 'RUNNING HYBRID CNN + TRANSFORMER…';
 
-      // If Vercel proxy times out or returns 502/504, automatically retry directly against Render
-      if (!response.ok && (response.status === 502 || response.status === 504 || response.status === 503)) {
-        console.warn(`Proxy returned ${response.status}. Retrying directly against Render backend...`);
-        statusLabel.textContent = 'CONNECTING DIRECTLY TO ENGINE…';
-        response = await fetch(`https://terra-01.onrender.com/api/enhance`, {
+      let response = null;
+      try {
+        response = await fetch(primaryUrl, {
+          method: 'POST',
+          body: formData,
+        });
+      } catch (networkErr) {
+        console.warn(`Primary endpoint (${primaryUrl}) error: ${networkErr.message}. Retrying fallback...`);
+        statusLabel.textContent = 'RETRYING DIRECT CONNECTION…';
+        const fallbackUrl = primaryUrl.includes('onrender.com') ? '/api/enhance' : 'https://terra-01.onrender.com/api/enhance';
+        response = await fetch(fallbackUrl, {
+          method: 'POST',
+          body: formData,
+        });
+      }
+
+      // If server returned cold-start gateway error (502/503/504), retry directly once
+      if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504)) {
+        console.warn(`Received ${response.status}. Retrying direct engine connection...`);
+        statusLabel.textContent = 'ENGINE INITIALIZING, RETRYING…';
+        response = await fetch('https://terra-01.onrender.com/api/enhance', {
           method: 'POST',
           body: formData,
         });
       }
 
       if (!response.ok) {
-        let errorMsg = `Server error ${response.status}`;
+        let errorMsg = `Server returned status ${response.status}`;
         try {
           const errorData = await response.json();
           errorMsg = errorData.detail || errorMsg;
         } catch {
           const rawText = await response.text().catch(() => '');
           if (rawText) errorMsg = `${errorMsg}: ${rawText.slice(0, 150)}`;
+        }
+        if (response.status === 502 || response.status === 503 || response.status === 504) {
+          errorMsg = 'The hybrid engine is spinning up from cold sleep on Render. Please wait 15–20 seconds and click Enhance again!';
         }
         throw new Error(errorMsg);
       }
