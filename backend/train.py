@@ -72,31 +72,62 @@ class CharbonnierLoss(nn.Module):
 
 def train(args):
     device = "cuda" if torch.cuda.is_available() and not args.cpu else "cpu"
-    print(f"[Training] Using device: {device}")
+    print(f"[Training] Using device: {device.upper()}")
 
     model = OrbitalHybridNet(scale=args.scale).to(device)
+
+    # Resolve resume weights (continue training / fine-tune)
+    resume_path = args.resume
+    if resume_path is None:
+        default_weights = os.path.join(args.save_dir, "orbital_hybrid_net.pth")
+        if os.path.exists(default_weights) and not args.fresh:
+            resume_path = default_weights
+
+    if resume_path and os.path.exists(resume_path) and not args.fresh:
+        print(f"[Training] Loading checkpoint to continue training: {resume_path}")
+        try:
+            state_dict = torch.load(resume_path, map_location=device)
+            model.load_state_dict(state_dict)
+            print("[Training] Checkpoint successfully loaded! Warm-starting training.")
+        except Exception as e:
+            print(f"[Training] Warning: Could not load checkpoint ({e}). Training from scratch.")
+    else:
+        print("[Training] Training model from scratch (random initialization).")
+
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
     criterion = CharbonnierLoss()
 
-    if not os.path.exists(args.data_dir):
-        print(f"[Training] Data directory {args.data_dir} does not exist. Please provide dataset path.")
+    # Auto-detect data_dir if default does not exist
+    data_dir = args.data_dir
+    if not os.path.exists(data_dir):
+        alt_dirs = ["./Frontend/dataset", "./dataset", "../Frontend/dataset"]
+        for alt in alt_dirs:
+            if os.path.exists(alt) and len(os.listdir(alt)) > 0:
+                data_dir = alt
+                print(f"[Training] Using detected dataset directory: {data_dir}")
+                break
+
+    if not os.path.exists(data_dir):
+        print(f"[Training] Error: Data directory '{args.data_dir}' not found. Run 'python Frontend/prepare_dataset.py' first.")
         return
 
-    dataset = OrbitalDataset(args.data_dir, patch_size=args.patch_size, scale=args.scale)
+    dataset = OrbitalDataset(data_dir, patch_size=args.patch_size, scale=args.scale)
     if len(dataset) == 0:
-        print(f"[Training] No images found in {args.data_dir}.")
+        print(f"[Training] Error: No valid images found in {data_dir}.")
         return
 
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     print(f"[Training] Dataset loaded: {len(dataset)} orbital tiles. Starting {args.epochs} epochs...")
 
     os.makedirs(args.save_dir, exist_ok=True)
-    save_path = os.path.join(args.save_dir, f"orbital_hybrid_net_s{args.scale}.pth")
+    save_filename = args.save_name if args.save_name else "orbital_hybrid_net.pth"
+    save_path = os.path.join(args.save_dir, save_filename)
 
     model.train()
     for epoch in range(1, args.epochs + 1):
         total_loss = 0.0
+        total_mse = 0.0
         start = time.time()
         for batch_idx, (lr, hr) in enumerate(dataloader):
             lr, hr = lr.to(device), hr.to(device)
@@ -109,27 +140,44 @@ def train(args):
             optimizer.step()
 
             total_loss += loss.item()
+            with torch.no_grad():
+                mse = F.mse_loss(sr.clamp(0, 1), hr.clamp(0, 1)).item()
+                total_mse += mse
 
         scheduler.step()
         avg_loss = total_loss / len(dataloader)
+        avg_mse = total_mse / len(dataloader)
+        avg_psnr = 10 * torch.log10(torch.tensor(1.0 / max(avg_mse, 1e-8))).item()
         elapsed = time.time() - start
-        print(f"[Epoch {epoch:03d}/{args.epochs:03d}] Avg Loss: {avg_loss:.6f} | Time: {elapsed:.2f}s")
+        current_lr = scheduler.get_last_lr()[0]
+        print(f"[Epoch {epoch:03d}/{args.epochs:03d}] Loss: {avg_loss:.6f} | PSNR: {avg_psnr:.2f} dB | LR: {current_lr:.2e} | Time: {elapsed:.2f}s")
 
         if epoch % args.save_interval == 0 or epoch == args.epochs:
+            # Backup previous weights before overwriting
+            if os.path.exists(save_path):
+                backup_path = save_path + ".bak"
+                try:
+                    import shutil
+                    shutil.copyfile(save_path, backup_path)
+                except Exception:
+                    pass
             torch.save(model.state_dict(), save_path)
-            print(f"[Training] Model checkpoint saved to {save_path}")
+            print(f"[Training] Model checkpoint saved to {save_path} (backup created)")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train OrbitalHybridNet")
-    parser.add_argument("--data_dir", type=str, default="./dataset/satellite_images")
-    parser.add_argument("--save_dir", type=str, default="./backend/model/weights")
-    parser.add_argument("--scale", type=int, default=2)
-    parser.add_argument("--patch_size", type=int, default=128)
-    parser.add_argument("--batch_size", type=int, default=8)
-    parser.add_argument("--epochs", type=int, default=20)
-    parser.add_argument("--lr", type=float, default=2e-4)
-    parser.add_argument("--save_interval", type=int, default=5)
-    parser.add_argument("--cpu", action="store_true")
+    parser.add_argument("--data_dir", type=str, default="./Frontend/dataset", help="Directory containing HR satellite images")
+    parser.add_argument("--save_dir", type=str, default="./backend/model/weights", help="Directory to save model weights")
+    parser.add_argument("--save_name", type=str, default="orbital_hybrid_net.pth", help="Checkpoint filename to save")
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to continue training from")
+    parser.add_argument("--fresh", action="store_true", help="Force train from scratch instead of warm-starting from existing weights")
+    parser.add_argument("--scale", type=int, default=2, help="Super-resolution scale factor")
+    parser.add_argument("--patch_size", type=int, default=128, help="Low-resolution input patch size")
+    parser.add_argument("--batch_size", type=int, default=8, help="Batch size for training")
+    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate (use 1e-4 for fine-tuning)")
+    parser.add_argument("--save_interval", type=int, default=5, help="Save checkpoint every N epochs")
+    parser.add_argument("--cpu", action="store_true", help="Force CPU training even if CUDA is available")
     args = parser.parse_args()
     train(args)
