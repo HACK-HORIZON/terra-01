@@ -499,58 +499,26 @@
     event.preventDefault();
     signupStatus.textContent = 'Demo mode: your Sphere account is ready to create.';
   });
-  // 9. Model Specs & Training Modal handlers
-  const modelModal = document.querySelector('#model-modal');
+  // 9. Model Specs topbar pill handler
   const trainingPillBtn = document.querySelector('#training-pill-btn');
-  const openTrainingModalBtn = document.querySelector('#open-training-modal');
-
-  function openModelModal(e) {
-    if (e) e.preventDefault();
-    if (modelModal) {
-      modelModal.hidden = false;
-      modelModal.setAttribute('aria-hidden', 'false');
-      document.body.classList.add('modal-open');
-    }
+  if (trainingPillBtn) {
+    trainingPillBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const actionNote = document.querySelector('#action-note');
+      if (actionNote) {
+        actionNote.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        actionNote.style.transition = 'color 0.3s, text-shadow 0.3s';
+        actionNote.style.color = 'var(--cyan)';
+        setTimeout(() => {
+          actionNote.style.color = '';
+        }, 1800);
+      }
+    });
   }
-
-  function closeModelModal() {
-    if (modelModal) {
-      modelModal.hidden = true;
-      modelModal.setAttribute('aria-hidden', 'true');
-      document.body.classList.remove('modal-open');
-    }
-  }
-
-  if (trainingPillBtn) trainingPillBtn.addEventListener('click', openModelModal);
-  if (openTrainingModalBtn) openTrainingModalBtn.addEventListener('click', openModelModal);
-  document.querySelectorAll('[data-model-close]').forEach((el) => {
-    el.addEventListener('click', closeModelModal);
-  });
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      if (modelModal && !modelModal.hidden) closeModelModal();
-      if (loginModal && !loginModal.hidden) closeLogin();
-    }
+    if (event.key === 'Escape' && !loginModal.hidden) closeLogin();
   });
-
-  async function loadModelSpecs() {
-    try {
-      let resp = await fetch(`${API_BASE}/api/model/info`).catch(() => null);
-      if (!resp || !resp.ok) {
-        resp = await fetch('/api/model/info').catch(() => null);
-      }
-      if (resp && resp.ok) {
-        const info = await resp.json();
-        const paramCountEl = document.querySelector('#modal-param-count');
-        if (paramCountEl && info.total_parameters) {
-          paramCountEl.textContent = `${Number(info.total_parameters).toLocaleString()} Parameters`;
-        }
-      }
-    } catch {
-      // Use pre-rendered default telemetry
-    }
-  }
 
   // Initialize
   initGlobe();

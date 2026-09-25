@@ -93,40 +93,6 @@
                 <span>Obstacle Removal</span>
               </label>
             </div>
-            <div class="training-card" id="training-card">
-              <div class="training-card-header">
-                <div class="training-card-title-group">
-                  <span class="training-pulse-dot"></span>
-                  <span class="training-card-title">MODEL TRAINING STATUS</span>
-                </div>
-                <span class="training-card-badge">100 / 100 EPOCHS</span>
-              </div>
-              <div class="training-track">
-                <div class="training-bar-fill" style="width: 100%;"></div>
-              </div>
-              <div class="training-grid-stats">
-                <div class="t-stat">
-                  <span class="t-stat-label">CONVERGENCE</span>
-                  <span class="t-stat-value text-cyan">100% (Loss 0.0048)</span>
-                </div>
-                <div class="t-stat">
-                  <span class="t-stat-label">DATASET</span>
-                  <span class="t-stat-value">Sentinel-2 & SpaceNet</span>
-                </div>
-                <div class="t-stat">
-                  <span class="t-stat-label">OPTIMIZER</span>
-                  <span class="t-stat-value">AdamW (lr 2e-4)</span>
-                </div>
-                <div class="t-stat">
-                  <span class="t-stat-label">VALIDATION</span>
-                  <span class="t-stat-value">0.9938 SSIM · 44.28dB</span>
-                </div>
-              </div>
-              <button type="button" class="training-details-trigger" id="open-training-modal" aria-label="Open detailed model training telemetry">
-                <span>View Full Architecture & Loss Curve</span>
-                <span aria-hidden="true">↗</span>
-              </button>
-            </div>
             <button id="enhance-button" class="enhance-button" type="button" disabled>
               <span class="button-text">Enhance with Hybrid AI</span><span class="button-arrow"
                 aria-hidden="true">→</span><span class="spinner" aria-hidden="true"></span>
@@ -206,37 +172,6 @@
         <div class="metric-card"><span class="metric-name">MAE <small>ERROR</small></span><strong
             id="metric-mae">—</strong><span class="metric-bar"><i></i></span></div>
       </div>
-      <div class="metrics-training-summary">
-        <div class="m-training-top">
-          <div>
-            <div class="eyebrow eyebrow-left"><span></span> Deep Learning Telemetry</div>
-            <h3 class="m-training-h3">OrbitalHybridNet Training & Convergence Record</h3>
-          </div>
-          <span class="checkpoint-badge">MODEL: 100/100 EPOCHS</span>
-        </div>
-        <div class="m-training-cards-grid">
-          <div class="m-train-box">
-            <span class="m-train-num">100</span>
-            <span class="m-train-lbl">EPOCHS TRAINED</span>
-            <p>100% full convergence cycles with Cosine Annealing learning rate schedule.</p>
-          </div>
-          <div class="m-train-box">
-            <span class="m-train-num">0.0048</span>
-            <span class="m-train-lbl">CHARBONNIER LOSS</span>
-            <p>Decreased monotonically from 0.0112 initial loss for sub-pixel fidelity.</p>
-          </div>
-          <div class="m-train-box">
-            <span class="m-train-num">44.28 dB</span>
-            <span class="m-train-lbl">BENCHMARK PSNR</span>
-            <p>Validated peak signal-to-noise ratio preserving sharp orbital boundaries.</p>
-          </div>
-          <div class="m-train-box">
-            <span class="m-train-num">0.9938</span>
-            <span class="m-train-lbl">STRUCTURAL SSIM</span>
-            <p>High structural similarity across paired high-resolution orbital validation sets.</p>
-          </div>
-        </div>
-      </div>
       <p class="metrics-caption"><span>✦</span> These metrics let you objectively judge <b>Low → High</b> resolution
         quality. <b>Model trained 100 epochs</b> (loss 0.011→0.005). For true SR PSNR 28-45dB, evaluate with paired HR/LR satellite data.</p>
     </section>
@@ -285,73 +220,6 @@
         </form>
         <p class="signup-prompt">Already have an account? <a href="#login" data-auth-switch="login">Log in</a></p>
       </div>
-    </div>
-  </div>
-
-  <div id="model-modal" class="model-modal" role="dialog" aria-modal="true" aria-labelledby="model-modal-title"
-    aria-hidden="true" hidden>
-    <div class="modal-backdrop" data-model-close></div>
-    <div class="model-card">
-      <button class="modal-close" type="button" aria-label="Close model specs" data-model-close>×</button>
-      <div class="eyebrow eyebrow-left"><span></span> Architecture & Training</div>
-      <h2 id="model-modal-title">OrbitalHybridNet<br /><em>Deep Learning Specs.</em></h2>
-      <p class="model-modal-copy">CNN-Transformer hybrid neural network optimized for satellite super-resolution, radiometric atmospheric enhancement, and edge reconstruction.</p>
-      
-      <div class="modal-training-status-bar">
-        <div class="status-bar-header">
-          <span>TRAINING STATUS: <b>100 / 100 EPOCHS (100% CONVERGED)</b></span>
-          <span class="status-pill-green">PRODUCTION READY</span>
-        </div>
-        <div class="modal-progress-track">
-          <div class="modal-progress-fill" style="width: 100%;"></div>
-        </div>
-      </div>
-
-      <div class="modal-specs-grid">
-        <div class="spec-card">
-          <span class="spec-k">NEURAL ARCHITECTURE</span>
-          <strong class="spec-v">OrbitalHybridNet (CNN + MDTA)</strong>
-          <small class="spec-sub">Multi-Dconv Head Transposed Attention</small>
-        </div>
-        <div class="spec-card">
-          <span class="spec-k">TOTAL PARAMETERS</span>
-          <strong class="spec-v" id="modal-param-count">545,007 Parameters</strong>
-          <small class="spec-sub">3× Hybrid Groups + RCAB + GFFN</small>
-        </div>
-        <div class="spec-card">
-          <span class="spec-k">TRAINING LOSS</span>
-          <strong class="spec-v text-cyan">0.0112 → 0.0048</strong>
-          <small class="spec-sub">Charbonnier Loss (Smooth L1)</small>
-        </div>
-        <div class="spec-card">
-          <span class="spec-k">OPTIMIZER & SCHEDULE</span>
-          <strong class="spec-v">AdamW (lr: 2e-4)</strong>
-          <small class="spec-sub">Cosine Annealing to 1e-6</small>
-        </div>
-        <div class="spec-card">
-          <span class="spec-k">TRAINING DATASET</span>
-          <strong class="spec-v">Sentinel-2 & SpaceNet</strong>
-          <small class="spec-sub">Paired HR/LR satellite earth observation</small>
-        </div>
-        <div class="spec-card">
-          <span class="spec-k">VALIDATION BENCHMARK</span>
-          <strong class="spec-v">0.9938 SSIM · 44.28 dB PSNR</strong>
-          <small class="spec-sub">Calibrated satellite radiometry</small>
-        </div>
-      </div>
-
-      <div class="loss-curve-section">
-        <span class="loss-curve-title">LOSS CONVERGENCE TRAJECTORY (100 EPOCHS)</span>
-        <div class="loss-steps">
-          <div class="loss-step"><span class="step-ep">EP 1</span><span class="step-bar" style="height: 100%;"></span><span class="step-val">0.0112</span></div>
-          <div class="loss-step"><span class="step-ep">EP 25</span><span class="step-bar" style="height: 72%;"></span><span class="step-val">0.0078</span></div>
-          <div class="loss-step"><span class="step-ep">EP 50</span><span class="step-bar" style="height: 52%;"></span><span class="step-val">0.0059</span></div>
-          <div class="loss-step"><span class="step-ep">EP 75</span><span class="step-bar" style="height: 44%;"></span><span class="step-val">0.0051</span></div>
-          <div class="loss-step active"><span class="step-ep">EP 100</span><span class="step-bar" style="height: 40%;"></span><span class="step-val">0.0048</span></div>
-        </div>
-      </div>
-
-      <button class="modal-done-btn" type="button" data-model-close>Close Specifications</button>
     </div>
   </div>
 
