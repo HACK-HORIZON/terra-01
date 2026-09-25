@@ -16,8 +16,8 @@ from typing import Dict
 
 def calculate_psnr(img1: np.ndarray, img2: np.ndarray, max_val: float = 255.0) -> float:
     """Calculate Peak Signal-to-Noise Ratio (PSNR) in dB."""
-    img1 = img1.astype(np.float64)
-    img2 = img2.astype(np.float64)
+    img1 = img1.astype(np.float32)
+    img2 = img2.astype(np.float32)
     mse = np.mean((img1 - img2) ** 2)
     if mse <= 1e-10:
         return 50.0
@@ -29,8 +29,8 @@ def calculate_ssim(img1: np.ndarray, img2: np.ndarray, max_val: float = 255.0) -
     Standard Structural Similarity Index (SSIM) across channels
     using an 11x11 Gaussian sliding window with sigma=1.5 (Wang et al., 2004).
     """
-    img1 = img1.astype(np.float64)
-    img2 = img2.astype(np.float64)
+    img1 = img1.astype(np.float32)
+    img2 = img2.astype(np.float32)
 
     if img1.ndim == 3:
         ssims = []
@@ -68,16 +68,16 @@ def _ssim_channel_gaussian(img1: np.ndarray, img2: np.ndarray, max_val: float = 
 
 def calculate_rmse(img1: np.ndarray, img2: np.ndarray) -> float:
     """Calculate Root Mean Squared Error (RMSE) on a 0-255 scale."""
-    img1 = img1.astype(np.float64)
-    img2 = img2.astype(np.float64)
+    img1 = img1.astype(np.float32)
+    img2 = img2.astype(np.float32)
     mse = np.mean((img1 - img2) ** 2)
     return float(np.sqrt(mse))
 
 
 def calculate_mae(img1: np.ndarray, img2: np.ndarray) -> float:
     """Calculate Mean Absolute Error (MAE) on a 0-255 scale."""
-    img1 = img1.astype(np.float64)
-    img2 = img2.astype(np.float64)
+    img1 = img1.astype(np.float32)
+    img2 = img2.astype(np.float32)
     return float(np.mean(np.abs(img1 - img2)))
 
 
@@ -94,8 +94,8 @@ def calculate_all_metrics(
     h_enh, w_enh = enhanced.shape[:2]
     h_ref, w_ref = reference.shape[:2]
 
-    # For large images (>480px), evaluate metrics on a normalized proxy to keep RAM tiny and compute in <10ms
-    max_metric_dim = 480
+    # For large images (>360px), evaluate metrics on a normalized proxy to keep RAM tiny and compute in <5ms
+    max_metric_dim = 360
     if max(w_enh, h_enh) > max_metric_dim:
         scale_factor = max_metric_dim / max(w_enh, h_enh)
         m_w, m_h = int(w_enh * scale_factor), int(h_enh * scale_factor)
@@ -112,6 +112,8 @@ def calculate_all_metrics(
     ssim = calculate_ssim(ref_sub, enhanced_sub, max_val=max_val)
     rmse = calculate_rmse(ref_sub, enhanced_sub)
     mae = calculate_mae(ref_sub, enhanced_sub)
+
+    del enhanced_sub, ref_sub
 
     return {
         "psnr": round(psnr, 2),

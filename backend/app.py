@@ -19,6 +19,7 @@ except ImportError:
     from model.hybrid_transformer import OrbitalHybridNet
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FRONTEND_DIR = os.path.join(BASE_DIR, "Frontend") if os.path.exists(os.path.join(BASE_DIR, "Frontend")) else BASE_DIR
 
 app = FastAPI(
     title="Orbital Image Enhancer API",
@@ -41,7 +42,7 @@ app.add_middleware(
 async def startup_event():
     print("[API] Orbital Enhancement Engine starting...")
     import torch
-    torch.set_num_threads(2)  # Prevent thread pool RAM explosion on cloud container
+    torch.set_num_threads(1)  # 1 thread strictly avoids multi-arena glibc memory bloat on cloud container
     get_enhancer()
     print("[API] Model pre-loaded and ready for fast inference.")
 
@@ -123,7 +124,6 @@ async def enhance_image(
 
 @app.get("/api/samples")
 async def list_samples():
-    samples_dir = os.path.join(BASE_DIR, "public", "samples")
     samples = [
         {
             "id": "airport",
@@ -148,21 +148,32 @@ async def list_samples():
 
 
 # Serve static public assets (/samples, /favicon.ico, etc.)
-public_path = os.path.join(BASE_DIR, "public")
+public_path = os.path.join(FRONTEND_DIR, "public")
 if os.path.exists(public_path):
     app.mount("/public", StaticFiles(directory=public_path), name="public")
-    app.mount("/samples", StaticFiles(directory=os.path.join(public_path, "samples")), name="samples")
+    samples_dir = os.path.join(public_path, "samples")
+    if os.path.exists(samples_dir):
+        app.mount("/samples", StaticFiles(directory=samples_dir), name="samples")
 
 # Serve root static assets (styles.css, script.js)
 @app.get("/styles.css")
 async def get_styles():
-    return FileResponse(os.path.join(BASE_DIR, "styles.css"), media_type="text/css")
+    p = os.path.join(FRONTEND_DIR, "styles.css")
+    if os.path.exists(p):
+        return FileResponse(p, media_type="text/css")
+    raise HTTPException(status_code=404, detail="styles.css not found")
 
 @app.get("/script.js")
 async def get_script():
-    return FileResponse(os.path.join(BASE_DIR, "script.js"), media_type="application/javascript")
+    p = os.path.join(FRONTEND_DIR, "script.js")
+    if os.path.exists(p):
+        return FileResponse(p, media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="script.js not found")
 
 # Root index page
 @app.get("/")
 async def get_index():
-    return FileResponse(os.path.join(BASE_DIR, "index.html"), media_type="text/html")
+    p = os.path.join(FRONTEND_DIR, "index.html")
+    if os.path.exists(p):
+        return FileResponse(p, media_type="text/html")
+    return JSONResponse(content={"message": "Orbital Image Enhancement Engine API is operational."})

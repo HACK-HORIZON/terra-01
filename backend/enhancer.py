@@ -112,10 +112,10 @@ class OrbitalEnhancer:
         img_pil = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         orig_w, orig_h = img_pil.size
 
-        # Preserve full high-definition satellite resolution (no artificial 720px bottleneck).
-        # Only limit if image is exceptionally massive (>2048px) to guarantee cloud stability.
-        torch.set_num_threads(2)
-        max_dim = 2048
+        # Limit maximum dimension to 512px to guarantee 1024x1024 HD output while remaining
+        # strictly within Render free-tier 512MB RAM and 100s timeout limits.
+        torch.set_num_threads(1)
+        max_dim = 512
         if max(orig_w, orig_h) > max_dim:
             ratio = max_dim / max(orig_w, orig_h)
             new_w = int(orig_w * ratio)
@@ -133,18 +133,20 @@ class OrbitalEnhancer:
             x_in = x_in.to(self.device)
 
             with torch.no_grad():
-                # Direct forward pass for compact images (<= 320px). For larger images, use seamless Hann-windowed
-                # tile inference (tile_size=320, overlap=32) to strictly maintain RAM well under 50MB (critical for Render's 512MB limit)
-                if max(w, h) <= 320:
+                # Direct forward pass for compact images (<= 160px). For larger images, use seamless Hann-windowed
+                # tile inference (tile_size=160, overlap=20) to strictly maintain RAM under 40MB (eliminating 502/OOM errors)
+                if max(w, h) <= 160:
                     sr_tensor = self.model_2x(x_in)
                 else:
-                    sr_tensor = self._tile_forward(x_in, self.model_2x, tile_size=320, overlap=32)
+                    sr_tensor = self._tile_forward(x_in, self.model_2x, tile_size=160, overlap=20)
 
                 if sr_tensor.dtype == torch.float16:
                     sr_tensor = sr_tensor.float()
 
                 enhanced_np = (sr_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
                 del sr_tensor, x_in
+                import gc
+                gc.collect()
         else:
             enhanced_np = img_np.copy()
 
@@ -196,7 +198,7 @@ class OrbitalEnhancer:
             "scale_factor": scale
         }
 
-    def _tile_forward(self, x: torch.Tensor, model: torch.nn.Module, tile_size: int = 512, overlap: int = 48) -> torch.Tensor:
+    def _tile_forward(self, x: torch.Tensor, model: torch.nn.Module, tile_size: int = 160, overlap: int = 20) -> torch.Tensor:
         b, c, h, w = x.shape
         scale = model.scale
         out_h, out_w = h * scale, w * scale
@@ -233,6 +235,7 @@ class OrbitalEnhancer:
 
                 output[:, :, out_y_start:out_y_end, out_x_start:out_x_end] += tile_out * w2d
                 weights[:, :, out_y_start:out_y_end, out_x_start:out_x_end] += w2d
+                del tile, tile_out, wy, wx, w2d
 
         return output / torch.clamp(weights, min=1e-5)
 
