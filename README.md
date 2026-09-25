@@ -88,3 +88,4 @@ Model weights are automatically saved to `backend/model/weights/orbital_hybrid_n
   git commit -m "feat/fix: description of your changes"
   git push origin main
   ```
+- Collaborator: Aman Pradhan (@amanpradhan0103-lgtm)
