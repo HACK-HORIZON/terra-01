@@ -112,10 +112,10 @@ class OrbitalEnhancer:
         img_pil = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         orig_w, orig_h = img_pil.size
 
-        # Keep high-definition satellite resolution (720px -> 1440px super-res)
-        # Keeps peak memory safely under 85MB (well below Render's 512MB limit)
-        torch.set_num_threads(1)
-        max_dim = 720
+        # Preserve full high-definition satellite resolution (no artificial 720px bottleneck).
+        # Only limit if image is exceptionally massive (>2048px) to guarantee cloud stability.
+        torch.set_num_threads(2)
+        max_dim = 2048
         if max(orig_w, orig_h) > max_dim:
             ratio = max_dim / max(orig_w, orig_h)
             new_w = int(orig_w * ratio)
@@ -127,35 +127,27 @@ class OrbitalEnhancer:
         h, w = img_np.shape[:2]
 
         # 2. Hybrid Model Inference:
-        # Full high-res 2x spatial reconstruction fused with deep OrbitalHybridNet CNN+Transformer features
+        # Full spatial reconstruction using OrbitalHybridNet (CNN + MDTA Transformer)
         if scale == 2:
-            # 2x Super-Resolution Base
-            up_2x = cv2.resize(img_np, (w * 2, h * 2), interpolation=cv2.INTER_LANCZOS4)
-
-            # Deep feature inference on context patch (runs in 0.05s on CPU)
-            feat_w = min(160, w)
-            feat_h = min(160, h)
-            feat_in = cv2.resize(img_np, (feat_w, feat_h))
-            x_feat = torch.from_numpy(feat_in).permute(2, 0, 1).unsqueeze(0).float() / 255.0
-            x_feat = x_feat.to(self.device)
+            x_in = torch.from_numpy(img_np).permute(2, 0, 1).unsqueeze(0).float() / 255.0
+            x_in = x_in.to(self.device)
 
             with torch.no_grad():
-                sr_feat = self.model_2x(x_feat)
-                if sr_feat.dtype == torch.float16:
-                    sr_feat = sr_feat.float()
-                sr_feat_np = (sr_feat.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
-                del sr_feat, x_feat
+                # Direct full-frame forward pass if dimension <= 1280 (memory-efficient & seam-free)
+                if max(w, h) <= 1280:
+                    sr_tensor = self.model_2x(x_in)
+                else:
+                    sr_tensor = self._tile_forward(x_in, self.model_2x, tile_size=512, overlap=48)
 
-            sr_feat_resized = cv2.resize(sr_feat_np, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
-            del sr_feat_np
+                if sr_tensor.dtype == torch.float16:
+                    sr_tensor = sr_tensor.float()
 
-            # Fuse geometric structure with neural features
-            enhanced_np = cv2.addWeighted(up_2x, 0.94, sr_feat_resized, 0.06, 0)
-            del up_2x, sr_feat_resized
+                enhanced_np = (sr_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
+                del sr_tensor, x_in
         else:
             enhanced_np = img_np.copy()
 
-        # 3. Satellite Spectral & Contrast Refinements (optional fast_mode)
+        # 3. Satellite Spectral & Radiometric Refinements (optional fast_mode)
         if not fast_mode and any([apply_dehaze, apply_sharpen, denoise_level > 0, remove_clouds, remove_obstacles, deblur]):
             enhanced_np = self._apply_orbital_filters(
                 enhanced_np,
@@ -172,16 +164,16 @@ class OrbitalEnhancer:
         if compute_metrics:
             metrics = calculate_all_metrics(img_np, enhanced_np)
 
-        # 5. Base64 encoding (optimized)
+        # 5. Base64 encoding (high quality, faithful representation)
         out_pil = Image.fromarray(enhanced_np)
         out_w, out_h = out_pil.size
 
         buf_enhanced = io.BytesIO()
-        out_pil.save(buf_enhanced, format="JPEG", quality=95)  # High fidelity satellite details
+        out_pil.save(buf_enhanced, format="JPEG", quality=96)
         enhanced_b64 = "data:image/jpeg;base64," + base64.b64encode(buf_enhanced.getvalue()).decode("utf-8")
 
         buf_orig = io.BytesIO()
-        img_pil.save(buf_orig, format="JPEG", quality=95)
+        img_pil.save(buf_orig, format="JPEG", quality=96)
         original_b64 = "data:image/jpeg;base64," + base64.b64encode(buf_orig.getvalue()).decode("utf-8")
 
         del img_np, enhanced_np, out_pil, img_pil
@@ -203,7 +195,7 @@ class OrbitalEnhancer:
             "scale_factor": scale
         }
 
-    def _tile_forward(self, x: torch.Tensor, model: torch.nn.Module, tile_size: int = 400, overlap: int = 32) -> torch.Tensor:
+    def _tile_forward(self, x: torch.Tensor, model: torch.nn.Module, tile_size: int = 512, overlap: int = 48) -> torch.Tensor:
         b, c, h, w = x.shape
         scale = model.scale
         out_h, out_w = h * scale, w * scale
@@ -211,13 +203,18 @@ class OrbitalEnhancer:
         weights = torch.zeros((b, 1, out_h, out_w), device=x.device)
 
         stride = tile_size - overlap
-        for y in range(0, h, stride):
+        y_steps = list(range(0, h, stride))
+        x_steps = list(range(0, w, stride))
+
+        for y in y_steps:
             y_end = min(y + tile_size, h)
             y_start = max(0, y_end - tile_size)
+            curr_h = y_end - y_start
 
-            for xx in range(0, w, stride):
+            for xx in x_steps:
                 x_end = min(xx + tile_size, w)
                 x_start = max(0, x_end - tile_size)
+                curr_w = x_end - x_start
 
                 tile = x[:, :, y_start:y_end, x_start:x_end]
                 tile_out = model(tile)
@@ -227,10 +224,16 @@ class OrbitalEnhancer:
                 out_x_start = x_start * scale
                 out_x_end = x_end * scale
 
-                output[:, :, out_y_start:out_y_end, out_x_start:out_x_end] += tile_out
-                weights[:, :, out_y_start:out_y_end, out_x_start:out_x_end] += 1.0
+                # 2D Hann window for smooth, seamless tile blending without visible grid lines
+                wy = torch.hann_window(curr_h * scale, periodic=False, device=x.device)
+                wx = torch.hann_window(curr_w * scale, periodic=False, device=x.device)
+                w2d = (wy.unsqueeze(1) * wx.unsqueeze(0)).unsqueeze(0).unsqueeze(0)
+                w2d = torch.clamp(w2d, min=0.1)
 
-        return output / torch.clamp(weights, min=1.0)
+                output[:, :, out_y_start:out_y_end, out_x_start:out_x_end] += tile_out * w2d
+                weights[:, :, out_y_start:out_y_end, out_x_start:out_x_end] += w2d
+
+        return output / torch.clamp(weights, min=1e-5)
 
     def _detect_clouds(self, img_rgb: np.ndarray) -> np.ndarray:
         """Detect clouds using HSV color space and brightness thresholds."""
@@ -342,23 +345,25 @@ class OrbitalEnhancer:
         if deblur:
             res = self._deblur_wiener(res)
 
-        # 4. CLAHE (Contrast-Limited Adaptive Histogram Equalization) in LAB space
+        # 4. CLAHE in LAB space - calibrated for satellite radiometry (preserves natural dynamic range)
         if apply_dehaze:
             lab = cv2.cvtColor(res, cv2.COLOR_RGB2LAB)
             l, a, b = cv2.split(lab)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            # Gentle CLAHE with mild clipLimit blended with original luminance to prevent harsh contrast/shadows
+            clahe = cv2.createCLAHE(clipLimit=1.1, tileGridSize=(8, 8))
             cl = clahe.apply(l)
-            limg = cv2.merge((cl, a, b))
+            l_enhanced = cv2.addWeighted(l, 0.85, cl, 0.15, 0)
+            limg = cv2.merge((l_enhanced, a, b))
             res = cv2.cvtColor(limg, cv2.COLOR_LAB2RGB)
 
-        # 5. Denoising (using denoise_level parameter)
+        # 5. Denoising (subtle edge-preserving bilateral filter)
         if denoise_level > 0:
-            res = self._denoise_bilateral(res, strength=min(denoise_level, 0.35))
+            res = self._denoise_bilateral(res, strength=min(denoise_level, 0.2))
 
-        # 6. High-frequency edge sharpening for satellite structures (buildings, roofs, roads)
+        # 6. High-frequency structural edge restoration (sharpens roads & roofs without halo artifacts or ringing)
         if apply_sharpen:
-            blurred = cv2.GaussianBlur(res, (0, 0), 1.4)
-            res = cv2.addWeighted(res, 1.42, blurred, -0.42, 0)
+            blurred = cv2.GaussianBlur(res, (0, 0), 1.0)
+            res = cv2.addWeighted(res, 1.10, blurred, -0.10, 0)
             res = np.clip(res, 0, 255).astype(np.uint8)
 
         return res
